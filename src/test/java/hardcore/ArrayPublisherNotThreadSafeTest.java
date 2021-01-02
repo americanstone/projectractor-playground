@@ -5,7 +5,6 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-import reactor.test.StepVerifier;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,7 +16,7 @@ import java.util.stream.LongStream;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 
-public class ArrayPublisherTest {
+public class ArrayPublisherNotThreadSafeTest {
     static Long[] generate(long num){
         return LongStream.range(0, num >= Integer.MAX_VALUE ? 100000 : num)
                 .boxed()
@@ -28,8 +27,13 @@ public class ArrayPublisherTest {
         CountDownLatch latch = new CountDownLatch(1);
         ArrayList<String> observedSignals = new ArrayList<>();
 
-        ArrayPublisher<Long> arrayPublisher = new ArrayPublisher<>(generate(5));
-
+        ArrayPublisherNotThreadSafe<Long> arrayPublisherNotThreadSafe = new ArrayPublisherNotThreadSafe<>(generate(5));
+        /*
+        onSubscribe onNext* (onError | onComplete)?
+        This means that onSubscribe is always signalled, followed by a possibly unbounded number of onNext signals
+        (as requested by Subscriber) followed by an onError signal if there is a failure,
+         or an onComplete signal when no more elements are available—all as long as the Subscription is not cancelled.
+         */
         Subscriber<Long> mySub = new Subscriber<Long>() {
             @Override
             public void onSubscribe(Subscription publisherCreatedSubscription) {
@@ -56,7 +60,7 @@ public class ArrayPublisherTest {
             }
         };
 
-        arrayPublisher.subscribe(mySub);
+        arrayPublisherNotThreadSafe.subscribe(mySub);
 
         Assertions.assertThat( latch.await(1, TimeUnit.SECONDS))
                 .isTrue();
@@ -81,7 +85,7 @@ public class ArrayPublisherTest {
         ArrayList<Long> collected = new ArrayList<>();
         long toRequest = 5L;
         Long[] array = generate(toRequest);
-        ArrayPublisher<Long> publisher = new ArrayPublisher<>(array);
+        ArrayPublisherNotThreadSafe<Long> publisher = new ArrayPublisherNotThreadSafe<>(array);
         Subscription[] subscription = new Subscription[1];
 
         publisher.subscribe(new Subscriber<Long>() {
@@ -133,7 +137,7 @@ public class ArrayPublisherTest {
         CountDownLatch latch = new CountDownLatch(1);
         Long[] array = new Long[] { null };
         AtomicReference<Throwable> error = new AtomicReference<>();
-        ArrayPublisher<Long> publisher = new ArrayPublisher<>(array);
+        ArrayPublisherNotThreadSafe<Long> publisher = new ArrayPublisherNotThreadSafe<>(array);
 
         publisher.subscribe(new Subscriber<Long>() {
             @Override
@@ -167,7 +171,8 @@ public class ArrayPublisherTest {
         ArrayList<Long> collected = new ArrayList<>();
         long toRequest = 10L;
         Long[] array = generate(toRequest);
-        ArrayPublisher<Long> publisher = new ArrayPublisher<>(array);
+
+        ArrayPublisherNotThreadSafe<Long> publisher = new ArrayPublisherNotThreadSafe<>(array);
 
         Subscriber<Long> sub = new Subscriber<Long>() {
             Subscription subscriptionPassToSubscriber;
@@ -196,7 +201,7 @@ public class ArrayPublisherTest {
         };
         publisher.subscribe(sub);
 
-        latch.await(5, SECONDS);
+        latch.await(1, SECONDS);
 
         Assertions.assertThat(collected).containsExactly(array);
 
@@ -217,7 +222,7 @@ public class ArrayPublisherTest {
         ArrayList<Long> collected = new ArrayList<>();
         long toRequest = 1000L;
         Long[] array = generate(toRequest);
-        ArrayPublisher<Long> publisher = new ArrayPublisher<>(array);
+        ArrayPublisherNotThreadSafe<Long> publisher = new ArrayPublisherNotThreadSafe<>(array);
 
         publisher.subscribe(new Subscriber<Long>() {
 
@@ -247,4 +252,7 @@ public class ArrayPublisherTest {
 
         Assertions.assertThat(collected).isEmpty();
     }
+
+
+
 }
